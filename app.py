@@ -1,11 +1,12 @@
 """ extract key words from patents"""
 import os
+import time
 from typing import Callable
 from PIL.Image import Image
 from pathlib import Path
 import gradio as gr
 import logging
-
+import pandas as pd
 from keywod_extractor import KeyWordExtractor
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -37,29 +38,30 @@ def get_patent_abstract():
 
 
 place_holder_text = 'A method for preparing a polygraphene membrane includes adding ' \
-                  'graphite and sodium nitrate into sulfuric acid to form a first mixture; ' \
-                  'adding potassium permanganate solution into the first mixture to form a ' \
-                  'second mixture;adding hydrogen peroxide solution to the second mixture to ' \
-                  'form a mixture including soluble manganese ions; filtering the mixture including ' \
-                  'soluble manganese ions to form an aqueous suspension; centrifuging the aqueous suspension; ' \
-                  'performing ultrasonication of the suspension to obtain graphene oxide sheets; ' \
-                  'acylating the graphene oxide sheets to prepare an acylated graphene oxide sheet;' \
-                  ' and polymerizing the acylated graphene oxide sheets to prepare polygraphene.'
+                    'graphite and sodium nitrate into sulfuric acid to form a first mixture; ' \
+                    'adding potassium permanganate solution into the first mixture to form a ' \
+                    'second mixture;adding hydrogen peroxide solution to the second mixture to ' \
+                    'form a mixture including soluble manganese ions; filtering the mixture including ' \
+                    'soluble manganese ions to form an aqueous suspension; centrifuging the aqueous suspension; ' \
+                    'performing ultrasonication of the suspension to obtain graphene oxide sheets; ' \
+                    'acylating the graphene oxide sheets to prepare an acylated graphene oxide sheet;' \
+                    'and polymerizing the acylated graphene oxide sheets to prepare polygraphene.'
 
 
 def make_frontend(fn: Callable[[str], list]):
     allow_flagging = "never"
     readme = _load_readme(with_logging=allow_flagging == "manual")
+    outputs = [gr.components.Dataframe()]
     frontend = gr.Interface(
         fn=fn,  # which Python function are we interacting with?
-        outputs=gr.components.Textbox(),  # what output widgets does it need? the default text widget
+        outputs=outputs,  # what output widgets does it need? the default text widget
         # what input widgets does it need? we configure an image widget
         inputs=gr.components.Textbox(placeholder=_place_holder_input_text()),
         title="📝 Key Word Extraction",  # what should we display at the top of the page?
 
         description=__doc__,  # what should we display just above the interface?
         article=readme,  # what long-form content should we display below the interface?
-        examples=place_holder_text,  # which potential inputs should we provide?
+        examples=[place_holder_text],  # which potential inputs should we provide?
         cache_examples=False,  # should we cache those inputs for faster inference? slows down start
         # allow_flagging=allow_flagging,  # should we show users the option to "flag" outputs?
     )
@@ -107,18 +109,26 @@ class ExtractorBackend:
 
     def run(self, doc):
         preds, metrics = self._extract_with_metrics(doc)
+        df = pd.DataFrame(list(zip(preds, metrics)),
+                          columns=['Key Word', 'Relevance'])
 
-        return preds
+        return df
 
     def _extract_with_metrics(self, doc):
         keywords = list()
         relevances = list()
+        t1 = time.time()
         preds = self._predict(doc)
-
+        exec_time = time.time() - t1
         for word, metric in preds:
             keywords.append(word)
             relevances.append(metric)
         return keywords, relevances
+
+
+def _get_ouput_components():
+    outputs = list()
+    return outputs
 
 
 if __name__ == "__main__":
